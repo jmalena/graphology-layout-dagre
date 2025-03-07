@@ -6,6 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc && tsc-alias",
+    "build:watch": "tsc --watch",
     "docs": "typedoc",
     "format": "prettier 'src/**/*.{js,json,ts}' --write",
     "lint": "eslint src",
@@ -28,9 +29,11 @@
     "url": "https://github.com/jmalena/graphology-layout-dagre/issues"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^1.1.4",
     "graphology-dag": "^0.4.1",
     "graphology-types": "^0.24.8",
-    "graphology-utils": "^2.5.2"
+    "graphology-utils": "^2.5.2",
+    "valibot": "1.0.0-rc.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.20.0",

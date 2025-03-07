@@ -1,36 +1,38 @@
+import * as v from "valibot";
+import * as dagre from "@dagrejs/dagre";
 import Graph from "graphology-types";
-import isGraph from "graphology-utils/is-graph";
-
-/*
-var iterate = require('./iterate.js');
-var helpers = require('./helpers.js');
-
-var DEFAULT_SETTINGS = require('./defaults.js');
-*/
-
-export type DagreSettings = {
-  margin?: number;
-};
-
-export type DagreLayoutParameters = {
-  maxIterations?: number;
-  settings?: DagreSettings;
-};
+import { topologicalGenerations } from "graphology-dag";
+import { isGraph } from "graphology-utils";
 
 const DEFAULT_MAX_ITERATIONS = 500;
-const DEFAULT_SETTINGS = {
-  margin: 200,
-} satisfies DagreSettings;
+const DEFAULT_SETTINGS_MARGIN = 50;
+
+const DagreSettingsSchema = v.object({
+  margin: v.pipe(
+    v.optional(v.number(), DEFAULT_SETTINGS_MARGIN),
+    v.minValue(
+      0,
+      "graphology-layout-dagre: the `margin` setting should be non-negative number.",
+    ),
+  ),
+});
+
+const DagreLayoutParametersSchema = v.object({
+  maxIterations: v.pipe(
+    v.optional(v.number(), DEFAULT_MAX_ITERATIONS),
+    v.minValue(
+      1,
+      "graphology-layout-dagre: you should provide a positive number of maximum iterations.",
+    ),
+  ),
+  settings: v.optional(DagreSettingsSchema),
+});
+
+type DagreSettings = v.InferOutput<typeof DagreSettingsSchema>;
+type DagreLayoutParameters = v.InferOutput<typeof DagreLayoutParametersSchema>;
 
 /**
- * Asbtract function used to run a certain number of iterations.
- *
- * @param  {boolean}       assign        - Whether to assign positions.
- * @param  {Graph}         graph         - Target graph.
- * @param  {object|number} params        - If number, params.maxIterations, else:
- * @param  {number}        maxIterations - Maximum number of iterations.
- * @param  {object}        [settings]    - Settings.
- * @return {object|undefined}
+ * TODO: TSDoc
  */
 function abstractSynchronousLayout(
   assign: boolean,
@@ -50,42 +52,55 @@ function abstractSynchronousLayout(
   }
 
   if (typeof params === "number") {
-    params = { maxIterations: params };
+    params = v.parse(DagreLayoutParametersSchema, { maxIterations: params });
+  } else {
+    params = v.parse(DagreLayoutParametersSchema, params);
   }
 
-  var maxIterations = params.maxIterations || DEFAULT_MAX_ITERATIONS;
+  const dagreGraph = createDagreGraph(graph);
 
-  if (typeof maxIterations !== "number" || maxIterations <= 0) {
-    throw new Error(
-      "graphology-layout-dagre: you should provide a positive number of maximum iterations.",
-    );
-  }
+  graph.forEachNode((node) => {
+    const { x, y } = dagreGraph.node(node);
+    graph.setNodeAttribute(node, "x", x);
+    graph.setNodeAttribute(node, "y", y);
+  });
+}
 
-  /*
-  // Validating settings
-  var settings = Object.assign({}, DEFAULT_SETTINGS, params.settings),
-    validationError = helpers.validateSettings(settings);
+/**
+ * TODO: TSDoc
+ */
+function createDagreGraph(graph: Graph): dagre.graphlib.Graph {
+  const generations = topologicalGenerations(graph);
 
-  if (validationError)
-    throw new Error('graphology-layout-noverlap: ' + validationError.message);
+  generations.forEach((nodes, index) => {
+    nodes.forEach((node) => {
+      graph.setNodeAttribute(node, "rank", index);
+    });
+  });
 
-  // Building matrices
-  var matrix = helpers.graphToByteArray(graph, params.inputReducer),
-    converged = false,
-    i;
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  dagreGraph.setGraph({
+    rankdir: "BT",
+    ranker: "tight-tree",
+  });
 
-  // Iterating
-  for (i = 0; i < maxIterations && !converged; i++)
-    converged = iterate(settings, matrix).converged;
+  graph.forEachNode((node, attrs) => {
+    dagreGraph.setNode(node, {
+      label: node,
+      width: 100,
+      height: 50,
+      rank: attrs.rank,
+    });
+  });
 
-  // Applying
-  if (assign) {
-    helpers.assignLayoutChanges(graph, matrix, params.outputReducer);
-    return;
-  }
+  graph.forEachEdge((edge, attr, source, target) => {
+    dagreGraph.setEdge(source, target);
+  });
 
-  return helpers.collectLayoutChanges(graph, matrix, params.outputReducer);
-  */
+  dagre.layout(dagreGraph);
+
+  return dagreGraph;
 }
 
 const dagreLayout = abstractSynchronousLayout.bind(null, false);
