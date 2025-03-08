@@ -1,11 +1,13 @@
 import * as v from "valibot";
 import * as dagre from "@dagrejs/dagre";
-import Graph from "graphology-types";
+import DirectedGraph from "graphology-types";
 import { topologicalGenerations } from "graphology-dag";
 import { isGraph } from "graphology-utils";
+//import { countDescendants } from '/~/utils';
+import { countDescendants } from "./utils";
 
 const DEFAULT_MAX_ITERATIONS: number = 500;
-const DEFAULT_SETTINGS_NODE_WIDTH: number = 20;
+const DEFAULT_SETTINGS_NODE_WIDTH: number = 30;
 const DEFAULT_SETTINGS_NODE_HEIGHT: number = 20;
 
 const DagreSettingsSchema = v.object({
@@ -44,7 +46,7 @@ type DagreLayoutParameters = v.InferOutput<typeof DagreLayoutParametersSchema>;
  */
 function abstractSynchronousLayout(
   assign: boolean,
-  graph: Graph,
+  graph: DirectedGraph,
   params: DagreLayoutParameters | number = {},
 ) {
   // cbeck input parameters are correct
@@ -90,13 +92,13 @@ function abstractSynchronousLayout(
  * TODO: TSDoc
  */
 function createDagreGraph(
-  graph: Graph,
+  graph: DirectedGraph,
   settings: DagreSettings,
 ): dagre.graphlib.Graph {
   const dagreGraph = new dagre.graphlib.Graph({
     multigraph: false,
     //compound: false,
-    //directed: true,
+    directed: true,
   });
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({
@@ -109,14 +111,18 @@ function createDagreGraph(
   });
 
   const generations = topologicalGenerations(graph);
+  const descendants = countDescendants(graph);
+
+  console.log("descendants", descendants);
 
   // map generations to rank – more important nodes has less precedence
   generations.forEach((nodes, rank) => {
     nodes.forEach((node) => {
-      const weight = Math.log(generations[rank].length);
+      // Add node
+
+      const weight = generations[rank].length;
       const attrs = graph.getNodeAttributes(node);
 
-      // Setup Dagre Graph's Nodes
       dagreGraph.setNode(node, {
         ...attrs,
         width: settings.nodeWidth,
@@ -124,14 +130,23 @@ function createDagreGraph(
         rank,
       });
 
-      // Setup outgoing relationshiops from the current node
-      graph.forEachDirectedNeighbor(node, (neighbor, neighborAttr) => {
+      // Add node's direct neighbors
+
+      // neighbors sorted by how much greedy they are
+      const neighbors = graph
+        .outNeighbors(node)
+        .toSorted((a, b) => descendants[b] - descendants[a]);
+
+      neighbors.forEach((neighbor) => {
+        const weight = Math.log(descendants[neighbor] + 1);
+        const attrs = graph.getEdgeAttributes(node, neighbor);
+
         dagreGraph.setEdge(
           node,
           neighbor,
           {
             ...attrs,
-            minlen: 10, // NOTE: constraint on the min edge length
+            minlen: Math.log(weight + 1), // NOTE: constraint on the min edge length
             weight, // more weight means more edges needs to be generated => thus they needs more space
           },
           // edge, // NOTE: don't need named edges yet
@@ -141,6 +156,9 @@ function createDagreGraph(
   });
 
   dagre.layout(dagreGraph);
+
+  console.log(dagreGraph.edges().length);
+  console.log(graph.edges().length);
 
   return dagreGraph;
 }
