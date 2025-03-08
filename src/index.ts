@@ -78,13 +78,18 @@ function createDagreGraph(graph: Graph): dagre.graphlib.Graph {
     nodesep: 100,
   });
 
-  graph.forEachNode((node, attrs) => {
-    dagreGraph.setNode(node, {
-      label: node,
-      width: attrs.size,
-      height: attrs.size,
+  const generations = topologicalGenerations(graph);
+
+  for (const generation of generations) {
+    generation.forEach((node) => {
+      const attrs = graph.getNodeAttributes(node);
+      dagreGraph.setNode(node, {
+        label: node,
+        width: attrs.size,
+        height: attrs.size,
+      });
     });
-  });
+  }
 
   graph.forEachEdge((edge, attr, source, target) => {
     dagreGraph.setEdge(source, target);
