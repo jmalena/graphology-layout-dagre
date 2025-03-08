@@ -4,13 +4,8 @@ import Graph from "graphology-types";
 import { topologicalGenerations } from "graphology-dag";
 import { isGraph } from "graphology-utils";
 
-const DEFAULT_MAX_ITERATIONS = 500;
-const DEFAULT_SETTINGS_MARGIN = 50;
-
-// TODO: not implemented (much)
-const IS_HORIZONTAL = false;
-const DEFAULT_SETTINGS_EDGE_MIN_LEN = 10;
-const DEFAULT_SETTINGS_EDGE_MAX_LEN = 30;
+const DEFAULT_MAX_ITERATIONS: number = 500;
+const DEFAULT_SETTINGS_MARGIN: number = 50;
 
 const DagreSettingsSchema = v.object({
   margin: v.pipe(
@@ -43,6 +38,8 @@ function abstractSynchronousLayout(
   graph: Graph,
   params: DagreLayoutParameters | number = {},
 ) {
+  // cbeck input parameters are correct
+
   if (!isGraph(graph)) {
     throw new Error(
       "graphology-layout-dagre: the given graph is not a valid graphology instance.",
@@ -61,19 +58,20 @@ function abstractSynchronousLayout(
     params = v.parse(DagreLayoutParametersSchema, params);
   }
 
+  // generate Dagre Graph from given graph
+
   const dagreGraph = createDagreGraph(graph);
 
-  const { width: graphWidth, height: graphHeight } = dagreGraph.graph();
+  // update tne given graph to the computed dagre parameters
 
-  graph.forEachNode((node, attrs) => {
-    const { x, y } = dagreGraph.node(node);
-    graph.updateNodeAttributes(node, (attr) => ({
-      ...attrs,
-      targetPosition: IS_HORIZONTAL ? "left" : "top",
-      sourcePosition: IS_HORIZONTAL ? "right" : "bottoom",
-      x,
-      y,
-    }));
+  graph.nodes().forEach((node) => {
+    const attrs = dagreGraph.node(node);
+    graph.replaceNodeAttributes(node, attrs);
+  });
+
+  dagreGraph.edges().forEach((edges) => {
+    const attrs = dagreGraph.edge(edges);
+    graph.replaceEdgeAttributes(edges.v, edges.w, attrs);
   });
 }
 
@@ -82,58 +80,58 @@ function abstractSynchronousLayout(
  */
 function createDagreGraph(graph: Graph): dagre.graphlib.Graph {
   const dagreGraph = new dagre.graphlib.Graph({
-    multigraph: true,
-    compound: true,
-    directed: true,
+    multigraph: false,
+    //compound: false,
+    //directed: true,
   });
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({
     rankdir: "BT",
-    ranker: "network-simplex",
-    ranksep: 500,
-    nodesep: 200,
+    //align: "UR",
+    ranker: "tight-tree",
+    nodesep: 20,
+    edgesep: 5,
+    ranksep: 10,
   });
 
   const generations = topologicalGenerations(graph);
-  const maxGenerationCount = Math.max(
-    ...generations.map(({ length }) => length),
-  );
-  console.log("generations", generations, maxGenerationCount);
+  // map generations to rank – more important nodes has more precedence
+  const ranks = generations.map((_, i) => i);
+  // maps rank to weight – generation with most edges needs shortest edges
+  const weights = generations
+    .map((arr, index) => ({ index, size: arr.length }))
+    .sort((a, b) => a.size - b.size)
+    .map((obj) => obj.index);
 
   generations.forEach((nodes, i) => {
-    const rank = generations.length - i;
-
     nodes.forEach((node) => {
       const attrs = graph.getNodeAttributes(node);
+      const rank = ranks[i];
 
-      graph.setNodeAttribute(node, "rank", rank);
-
+      // Setup Dagre Graph's Nodes
       dagreGraph.setNode(node, {
-        label: node,
-        width: attrs.size,
-        height: attrs.size,
+        ...attrs,
         rank,
-        cluster: "cluster1",
       });
-    });
-  });
 
-  graph.forEachEdge((edge, attr, source, target) => {
-    const sourceAttrs = graph.getNodeAttributes(source);
-    const edgeDensityRatio =
-      generations[generations.length - sourceAttrs.rank + 1].length /
-      maxGenerationCount;
-    const minlen = Math.round(
-      DEFAULT_SETTINGS_EDGE_MIN_LEN +
-        edgeDensityRatio *
-          (DEFAULT_SETTINGS_EDGE_MAX_LEN - DEFAULT_SETTINGS_EDGE_MIN_LEN),
-    ); // more height for edgest with higher density and vice versa
-    dagreGraph.setEdge(
-      source,
-      target,
-      { weight: sourceAttrs.rank, minlen: 5 },
-      edge,
-    );
+      // Setup Dagre Graph's Edges
+      graph.forEachEdge(
+        (edge, attrs, source, target, sourceAttrs, targetAttrs) => {
+          const weight = weights[rank];
+
+          dagreGraph.setEdge(
+            source,
+            target,
+            {
+              ...attrs,
+              minlen: 10, // NOTE: constraint on the min edge length
+              weight: weight,
+            },
+            // edge, // NOTE: don't need named edges yet
+          );
+        },
+      );
+    });
   });
 
   dagre.layout(dagreGraph);

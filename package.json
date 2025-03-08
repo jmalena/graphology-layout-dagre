@@ -31,6 +31,7 @@
   "dependencies": {
     "@dagrejs/dagre": "^1.1.4",
     "graphology-dag": "^0.4.1",
+    "graphology-layout-noverlap": "^0.4.2",
     "graphology-types": "^0.24.8",
     "graphology-utils": "^2.5.2",
     "valibot": "1.0.0-rc.3"

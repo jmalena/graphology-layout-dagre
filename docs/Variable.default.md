@@ -4,4 +4,4 @@
 
 > `const` **default**: `any`
 
-Defined in: [index.ts:144](https://github.com/jmalena/graphology-layout-dagre/blob/c1f1f903df24fb3fe8ee55ca08101047d8e40d71/src/index.ts#L144)
+Defined in: [index.ts:142](https://github.com/jmalena/graphology-layout-dagre/blob/58f0578fb540fe3f625b1a6fac5dae4d6d734fe3/src/index.ts#L142)
