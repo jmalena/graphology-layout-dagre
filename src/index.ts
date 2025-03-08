@@ -7,6 +7,11 @@ import { isGraph } from "graphology-utils";
 const DEFAULT_MAX_ITERATIONS = 500;
 const DEFAULT_SETTINGS_MARGIN = 50;
 
+// TODO: not implemented (much)
+const IS_HORIZONTAL = false;
+const DEFAULT_SETTINGS_EDGE_MIN_LEN = 10;
+const DEFAULT_SETTINGS_EDGE_MAX_LEN = 30;
+
 const DagreSettingsSchema = v.object({
   margin: v.pipe(
     v.optional(v.number(), DEFAULT_SETTINGS_MARGIN),
@@ -58,10 +63,17 @@ function abstractSynchronousLayout(
 
   const dagreGraph = createDagreGraph(graph);
 
-  graph.forEachNode((node) => {
+  const { width: graphWidth, height: graphHeight } = dagreGraph.graph();
+
+  graph.forEachNode((node, attrs) => {
     const { x, y } = dagreGraph.node(node);
-    graph.setNodeAttribute(node, "x", x);
-    graph.setNodeAttribute(node, "y", y);
+    graph.updateNodeAttributes(node, (attr) => ({
+      ...attrs,
+      targetPosition: IS_HORIZONTAL ? "left" : "top",
+      sourcePosition: IS_HORIZONTAL ? "right" : "bottoom",
+      x,
+      y,
+    }));
   });
 }
 
@@ -69,30 +81,59 @@ function abstractSynchronousLayout(
  * TODO: TSDoc
  */
 function createDagreGraph(graph: Graph): dagre.graphlib.Graph {
-  const dagreGraph = new dagre.graphlib.Graph();
+  const dagreGraph = new dagre.graphlib.Graph({
+    multigraph: true,
+    compound: true,
+    directed: true,
+  });
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({
     rankdir: "BT",
-    ranker: "tight-tree",
-    ranksep: 1000,
-    nodesep: 100,
+    ranker: "network-simplex",
+    ranksep: 500,
+    nodesep: 200,
   });
 
   const generations = topologicalGenerations(graph);
+  const maxGenerationCount = Math.max(
+    ...generations.map(({ length }) => length),
+  );
+  console.log("generations", generations, maxGenerationCount);
 
-  for (const generation of generations) {
-    generation.forEach((node) => {
+  generations.forEach((nodes, i) => {
+    const rank = generations.length - i;
+
+    nodes.forEach((node) => {
       const attrs = graph.getNodeAttributes(node);
+
+      graph.setNodeAttribute(node, "rank", rank);
+
       dagreGraph.setNode(node, {
         label: node,
         width: attrs.size,
         height: attrs.size,
+        rank,
+        cluster: "cluster1",
       });
     });
-  }
+  });
 
   graph.forEachEdge((edge, attr, source, target) => {
-    dagreGraph.setEdge(source, target);
+    const sourceAttrs = graph.getNodeAttributes(source);
+    const edgeDensityRatio =
+      generations[generations.length - sourceAttrs.rank + 1].length /
+      maxGenerationCount;
+    const minlen = Math.round(
+      DEFAULT_SETTINGS_EDGE_MIN_LEN +
+        edgeDensityRatio *
+          (DEFAULT_SETTINGS_EDGE_MAX_LEN - DEFAULT_SETTINGS_EDGE_MIN_LEN),
+    ); // more height for edgest with higher density and vice versa
+    dagreGraph.setEdge(
+      source,
+      target,
+      { weight: sourceAttrs.rank, minlen: 5 },
+      edge,
+    );
   });
 
   dagre.layout(dagreGraph);
