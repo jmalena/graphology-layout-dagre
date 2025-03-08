@@ -28,7 +28,6 @@ const DagreLayoutParametersSchema = v.object({
   settings: v.optional(DagreSettingsSchema),
 });
 
-type DagreSettings = v.InferOutput<typeof DagreSettingsSchema>;
 type DagreLayoutParameters = v.InferOutput<typeof DagreLayoutParametersSchema>;
 
 /**
@@ -70,27 +69,20 @@ function abstractSynchronousLayout(
  * TODO: TSDoc
  */
 function createDagreGraph(graph: Graph): dagre.graphlib.Graph {
-  const generations = topologicalGenerations(graph);
-
-  generations.forEach((nodes, index) => {
-    nodes.forEach((node) => {
-      graph.setNodeAttribute(node, "rank", index);
-    });
-  });
-
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({
     rankdir: "BT",
     ranker: "tight-tree",
+    ranksep: 1000,
+    nodesep: 100,
   });
 
   graph.forEachNode((node, attrs) => {
     dagreGraph.setNode(node, {
       label: node,
-      width: 100,
-      height: 50,
-      rank: attrs.rank,
+      width: attrs.size,
+      height: attrs.size,
     });
   });
 
