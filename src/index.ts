@@ -47,7 +47,7 @@ function abstractSynchronousLayout(
   graph: Graph,
   params: DagreLayoutParameters | number = {},
 ) {
-  // cbeck input parameters are correct
+  // check input parameters are correct
 
   if (!isGraph(graph)) {
     throw new Error(
@@ -67,39 +67,41 @@ function abstractSynchronousLayout(
     params = v.parse(DagreLayoutParametersSchema, params);
   }
 
-  // generate Dagre Graph from given graph
+  // build Dagre Graph from given the graph to get the node positions
 
-  const dagreGraph = createDagreGraph(graph, params.settings);
+  const dagreGraph = buildDagreGraph(graph, params.settings);
 
-  // update tne given graph to the computed dagre parameters
+  // if requested, update the computed parameters immediately
 
-  dagreGraph.nodes().forEach((node) => {
-    const { x, y, width, height } = dagreGraph.node(node);
-    graph.mergeNodeAttributes(node, {
-      x: x - width / 2,
-      y: y - height / 2,
+  if (assign) {
+    dagreGraph.nodes().forEach((node) => {
+      const { x, y, width, height } = dagreGraph.node(node);
+      graph.mergeNodeAttributes(node, {
+        x: x - width / 2,
+        y: y - height / 2,
+      });
     });
-  });
 
-  dagreGraph.edges().forEach((edges) => {
-    const { points } = dagreGraph.edge(edges);
-    graph.mergeEdgeAttributes(edges.v, edges.w, {
-      points,
+    dagreGraph.edges().forEach((edges) => {
+      const { points } = dagreGraph.edge(edges);
+      graph.mergeEdgeAttributes(edges.v, edges.w, {
+        points,
+      });
     });
-  });
+  }
 }
 
 /**
  * TODO: TSDoc
  */
-function createDagreGraph(
+function buildDagreGraph(
   graph: Graph,
   settings: DagreSettings,
 ): dagre.graphlib.Graph {
   const dagreGraph = new dagre.graphlib.Graph({
     // multigraph: false,
     compound: true,
-    //directed: true,
+    directed: true,
   });
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({
